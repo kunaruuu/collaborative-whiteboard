@@ -9,6 +9,8 @@ function App() {
   const [lastPos, setLastPos] = useState({ x: 0, y: 0 });
   const [currentColor, setCurrentColor] = useState('#000000');
   const [currentBrushSize, setcurrentBrushSize] = useState(2);
+  const [drawingHistory, setDrawingHistory] = useState([]);
+
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -37,6 +39,17 @@ function App() {
     socket.on('drawing', (data) => {
       drawLine(data.x1, data.y1, data.x2, data.y2,data.color, data.brushSize);
     });
+    setDrawingHistory(prevHistory => [
+       ...prevHistory,
+       {
+         x1: lastPos.x,
+         y1: lastPos.y,
+         x2: currentX,
+         y2: currentY,
+         color: currentColor,
+        brushSize: currentBrushSize
+       }
+     ]);
 
     return () => {
       socket.off('drawing');
@@ -79,6 +92,17 @@ function App() {
       color: currentColor,
       brushSize: currentBrushSize
     });
+     setDrawingHistory(prevHistory => [
+       ...prevHistory,
+       {
+         x1: lastPos.x,
+         y1: lastPos.y,
+         x2: currentX,
+         y2: currentY,
+         color: currentColor,
+        brushSize: currentBrushSize
+       }
+     ]);
 
     setLastPos({ x: currentX, y: currentY });
   };
@@ -93,7 +117,15 @@ function App() {
 
   return (
     <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', backgroundColor: '#f0f0f0' }}>
-    <div style={{margin: '10px', display:'flex', gap: '10px', alignItems:'center'}}>
+      <canvas
+        ref={canvasRef}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseOut={handleMouseOut}
+        style={{ border: '1px solid black', backgroundColor: 'white' }}
+      />
+    <div style={{margin: '10px', display:'flex', gap: '10px', alignItems:"center"}}>
       <label htmlFor='colorPicker'>Color:</label>
       <input type='color' id="colorPicker" value={currentColor}
       onChange={(e)=> setCurrentColor(e.target.value)}></input>
@@ -106,14 +138,6 @@ function App() {
       onChange={(e)=> setcurrentBrushSize(e.target.value)}></input>
       <span>{currentBrushSize}px</span>
     </div>
-      <canvas
-        ref={canvasRef}
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onMouseOut={handleMouseOut}
-        style={{ border: '1px solid black', backgroundColor: 'white' }}
-      />
     </div>
   );
 }
