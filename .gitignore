@@ -1,0 +1,21 @@
+# Node modules
+node_modules/
+
+# Log files
+*.log
+npm-debug.log*
+
+# dotenv environment variables file
+.env
+
+# macOS specific files
+.DS_Store
+
+# npm package-lock.json (if you prefer yarn.lock)
+package-lock.json
+
+# Vite-specific build output
+dist/
+
+# VSCode settings
+.vscode/
