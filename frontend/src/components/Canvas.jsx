@@ -5,13 +5,10 @@ function Canvas({ socket, currentColor, currentBrushSize, drawingHistory, setDra
   const [isDrawing, setIsDrawing] = useState(false);
   const lastPos = useRef({ x: 0, y: 0 });
   const prevCanvasDimensions = useRef({ width: 0, height: 0 });
-
-  // NEW: useRef to hold the mutable drawing history array
   const drawingHistoryRef = useRef([]);
 
   // --- Helper Functions (wrapped in useCallback for stability) ---
 
-  // drawLine: Draws a line segment on the canvas context
   const drawLine = useCallback((x1, y1, x2, y2, color, brushSize, context) => {
     if (!context) return;
     context.strokeStyle = color;
@@ -22,8 +19,6 @@ function Canvas({ socket, currentColor, currentBrushSize, drawingHistory, setDra
     context.stroke();
   }, []);
 
-  // redrawCanvas: Clears canvas and redraws all strokes from history with scaling
-  // IMPORTANT: drawingHistory is NOT a dependency here anymore
   const redrawCanvas = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -40,7 +35,6 @@ function Canvas({ socket, currentColor, currentBrushSize, drawingHistory, setDra
 
       ctx.clearRect(0, 0, newWidth, newHeight);
 
-      // Access history from the ref, not the state variable
       drawingHistoryRef.current.forEach(stroke => {
         const scaledX1 = stroke.x1 * scaleX;
         const scaledY1 = stroke.y1 * scaleY;
@@ -50,9 +44,8 @@ function Canvas({ socket, currentColor, currentBrushSize, drawingHistory, setDra
         drawLine(scaledX1, scaledY1, scaledX2, scaledY2, stroke.color, stroke.brushSize, ctx);
       });
     }
-  }, [drawLine]); // Only depends on drawLine (which is stable)
+  }, [drawLine]);
 
-  // setCanvasDimensions: Sets canvas size and triggers redraw (only on resize/mount)
   const setCanvasDimensions = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -68,27 +61,16 @@ function Canvas({ socket, currentColor, currentBrushSize, drawingHistory, setDra
     redrawCanvas();
   }, [redrawCanvas]);
 
-  // --- Mouse Event Handlers ---
-
-  const handleMouseDown = useCallback((e) => {
-    setIsDrawing(true);
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const rect = canvas.getBoundingClientRect();
-    lastPos.current = {
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top,
-    };
-  }, []);
-
-  const handleMouseMove = useCallback((e) => {
+  // --- Unified Event Handler Logic ---
+  // This function handles both mouse and touch move events
+  const handleDrawingMove = useCallback((clientX, clientY) => {
     if (!isDrawing) return;
 
     const canvas = canvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
-    const currentX = e.clientX - rect.left;
-    const currentY = e.clientY - rect.top;
+    const currentX = clientX - rect.left;
+    const currentY = clientY - rect.top;
 
     const ctx = canvas.getContext('2d');
     ctx.strokeStyle = currentColor;
@@ -109,13 +91,27 @@ function Canvas({ socket, currentColor, currentBrushSize, drawingHistory, setDra
 
     socket.emit('drawing', strokeData);
 
-    // Update the ref immediately
     drawingHistoryRef.current.push(strokeData);
-    // Update the state to trigger re-render for other components if needed
     setDrawingHistory(drawingHistoryRef.current);
 
     lastPos.current = { x: currentX, y: currentY };
-  }, [isDrawing, currentColor, currentBrushSize, drawLine, socket, setDrawingHistory]);
+  }, [isDrawing, currentColor, currentBrushSize, socket, setDrawingHistory]);
+
+  // --- Mouse Event Handlers ---
+  const handleMouseDown = useCallback((e) => {
+    setIsDrawing(true);
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    lastPos.current = {
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top,
+    };
+  }, []);
+
+  const handleMouseMove = useCallback((e) => {
+    handleDrawingMove(e.clientX, e.clientY);
+  }, [handleDrawingMove]);
 
   const handleMouseUp = useCallback(() => {
     setIsDrawing(false);
@@ -125,7 +121,37 @@ function Canvas({ socket, currentColor, currentBrushSize, drawingHistory, setDra
     setIsDrawing(false);
   }, []);
 
-  // --- useEffect for Initial Canvas Setup and Listeners (Dimensions & Redraw) ---
+  // --- Touch Event Handlers ---
+  const handleTouchStart = useCallback((e) => {
+    e.preventDefault(); // Prevent default touch behavior (e.g., scrolling)
+    const touch = e.touches[0];
+    setIsDrawing(true);
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    lastPos.current = {
+      x: touch.clientX - rect.left,
+      y: touch.clientY - rect.top,
+    };
+  }, []);
+
+  const handleTouchMove = useCallback((e) => {
+    e.preventDefault(); // Prevent default touch behavior (e.g., scrolling)
+    const touch = e.touches[0];
+    handleDrawingMove(touch.clientX, touch.clientY);
+  }, [handleDrawingMove]);
+
+  const handleTouchEnd = useCallback((e) => {
+    e.preventDefault(); // Prevent default touch behavior
+    setIsDrawing(false);
+  }, []);
+
+  const handleTouchCancel = useCallback((e) => {
+    e.preventDefault(); // Prevent default touch behavior
+    setIsDrawing(false);
+  }, []);
+
+  // --- useEffects ---
   useEffect(() => {
     setCanvasDimensions();
     window.addEventListener('resize', setCanvasDimensions);
@@ -134,7 +160,6 @@ function Canvas({ socket, currentColor, currentBrushSize, drawingHistory, setDra
     };
   }, [setCanvasDimensions]);
 
-  // --- useEffect for Socket.IO Listeners (Receiving Drawings) ---
   useEffect(() => {
     socket.on('drawing', (data) => {
       const canvas = canvasRef.current;
@@ -142,7 +167,6 @@ function Canvas({ socket, currentColor, currentBrushSize, drawingHistory, setDra
       const ctx = canvas.getContext('2d');
       drawLine(data.x1, data.y1, data.x2, data.y2, data.color, data.brushSize, ctx);
 
-      // Update the ref immediately
       drawingHistoryRef.current.push({
         x1: data.x1,
         y1: data.y1,
@@ -151,29 +175,25 @@ function Canvas({ socket, currentColor, currentBrushSize, drawingHistory, setDra
         color: data.color,
         brushSize: data.brushSize
       });
-      // Update the state to trigger re-render for other components if needed
       setDrawingHistory(drawingHistoryRef.current);
     });
 
-    // NEW: Listener for clearCanvas event from server
     socket.on('clearCanvas', () => {
       const canvas = canvasRef.current;
       if (!canvas) return;
       const ctx = canvas.getContext('2d');
 
-      ctx.clearRect(0, 0, canvas.width, canvas.height); // Clear visual canvas
-      drawingHistoryRef.current = []; // Clear history in ref
-      setDrawingHistory([]); // Clear history in state
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      drawingHistoryRef.current = [];
+      setDrawingHistory([]);
     });
-
 
     return () => {
       socket.off('drawing');
-      socket.off('clearCanvas'); // Clean up clearCanvas listener
+      socket.off('clearCanvas');
     };
   }, [drawLine, socket, setDrawingHistory]);
 
-  // --- useEffect for Canvas Context Style Updates (Color/Brush Size) ---
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -187,11 +207,17 @@ function Canvas({ socket, currentColor, currentBrushSize, drawingHistory, setDra
   return (
     <canvas
       ref={canvasRef}
+      // Mouse Events
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
       onMouseOut={handleMouseOut}
-      style={{ border: '1px solid black', backgroundColor: 'white' }}
+      // Touch Events
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+      onTouchCancel={handleTouchCancel}
+      style={{ border: '1px solid black', backgroundColor: 'white', touchAction: 'none' }} // touchAction: 'none' helps prevent default browser gestures
     />
   );
 }
