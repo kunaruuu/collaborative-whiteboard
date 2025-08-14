@@ -3,7 +3,8 @@ import io from 'socket.io-client';
 import Canvas from './components/Canvas';
 import Toolbar from './components/Toolbar';
 
-const socket = io('http://localhost:3001'); // Connect to your backend
+const socket = io(import.meta.env.VITE_BACKEND_URL
+     || 'http://localhost:3001'); // Connect to your backend
 
 function App() {
   const [currentColor, setCurrentColor] = useState('#000000');
