@@ -1,12 +1,13 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 
-// This component will receive socket, currentColor, currentBrushSize,
-// and setDrawingHistory as props from App.jsx
 function Canvas({ socket, currentColor, currentBrushSize, drawingHistory, setDrawingHistory }) {
   const canvasRef = useRef(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const lastPos = useRef({ x: 0, y: 0 });
   const prevCanvasDimensions = useRef({ width: 0, height: 0 });
+
+  // NEW: useRef to hold the mutable drawing history array
+  const drawingHistoryRef = useRef([]);
 
   // --- Helper Functions (wrapped in useCallback for stability) ---
 
@@ -22,6 +23,7 @@ function Canvas({ socket, currentColor, currentBrushSize, drawingHistory, setDra
   }, []);
 
   // redrawCanvas: Clears canvas and redraws all strokes from history with scaling
+  // IMPORTANT: drawingHistory is NOT a dependency here anymore
   const redrawCanvas = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -38,8 +40,8 @@ function Canvas({ socket, currentColor, currentBrushSize, drawingHistory, setDra
 
       ctx.clearRect(0, 0, newWidth, newHeight);
 
-      drawingHistory.forEach(stroke => {
-        // Scale each coordinate
+      // Access history from the ref, not the state variable
+      drawingHistoryRef.current.forEach(stroke => {
         const scaledX1 = stroke.x1 * scaleX;
         const scaledY1 = stroke.y1 * scaleY;
         const scaledX2 = stroke.x2 * scaleX;
@@ -48,7 +50,7 @@ function Canvas({ socket, currentColor, currentBrushSize, drawingHistory, setDra
         drawLine(scaledX1, scaledY1, scaledX2, scaledY2, stroke.color, stroke.brushSize, ctx);
       });
     }
-  }, [drawingHistory, drawLine]);
+  }, [drawLine]); // Only depends on drawLine (which is stable)
 
   // setCanvasDimensions: Sets canvas size and triggers redraw (only on resize/mount)
   const setCanvasDimensions = useCallback(() => {
@@ -107,10 +109,10 @@ function Canvas({ socket, currentColor, currentBrushSize, drawingHistory, setDra
 
     socket.emit('drawing', strokeData);
 
-    setDrawingHistory(prevHistory => [
-      ...prevHistory,
-      strokeData
-    ]);
+    // Update the ref immediately
+    drawingHistoryRef.current.push(strokeData);
+    // Update the state to trigger re-render for other components if needed
+    setDrawingHistory(drawingHistoryRef.current);
 
     lastPos.current = { x: currentX, y: currentY };
   }, [isDrawing, currentColor, currentBrushSize, drawLine, socket, setDrawingHistory]);
@@ -140,21 +142,34 @@ function Canvas({ socket, currentColor, currentBrushSize, drawingHistory, setDra
       const ctx = canvas.getContext('2d');
       drawLine(data.x1, data.y1, data.x2, data.y2, data.color, data.brushSize, ctx);
 
-      setDrawingHistory(prevHistory => [
-        ...prevHistory,
-        {
-          x1: data.x1,
-          y1: data.y1,
-          x2: data.x2,
-          y2: data.y2,
-          color: data.color,
-          brushSize: data.brushSize
-        }
-      ]);
+      // Update the ref immediately
+      drawingHistoryRef.current.push({
+        x1: data.x1,
+        y1: data.y1,
+        x2: data.x2,
+        y2: data.y2,
+        color: data.color,
+        brushSize: data.brushSize
+      });
+      // Update the state to trigger re-render for other components if needed
+      setDrawingHistory(drawingHistoryRef.current);
     });
+
+    // NEW: Listener for clearCanvas event from server
+    socket.on('clearCanvas', () => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height); // Clear visual canvas
+      drawingHistoryRef.current = []; // Clear history in ref
+      setDrawingHistory([]); // Clear history in state
+    });
+
 
     return () => {
       socket.off('drawing');
+      socket.off('clearCanvas'); // Clean up clearCanvas listener
     };
   }, [drawLine, socket, setDrawingHistory]);
 

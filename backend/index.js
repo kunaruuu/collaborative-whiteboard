@@ -23,6 +23,12 @@ io.on('connection', (socket) => {
         // Broadcast the drawing data to all other connected clients
         socket.broadcast.emit('drawing', data);
     });
+    
+    socket.on('clearCanvas', () => {
+        console.log("Received clearCanvas event, broadcasting....");
+
+        io.emit("clearCanvas");
+    })
 });
 
 const PORT = process.env.PORT || 3001;
