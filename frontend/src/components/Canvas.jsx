@@ -4,13 +4,12 @@ function Canvas({ socket,
     currentColor, 
     currentBrushSize, 
     drawingHistory, 
-    setDrawingHistory, 
-    setRedoStack }) {
+    onDrawEnd }) {
   const canvasRef = useRef(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const lastPos = useRef({ x: 0, y: 0 });
   const prevCanvasDimensions = useRef({ width: 0, height: 0 });
-  const drawingHistoryRef = useRef([]);
+  const currentStrokeRef = useRef(null);
 
   // --- Helper Functions (wrapped in useCallback for stability) ---
 
@@ -40,16 +39,25 @@ function Canvas({ socket,
 
       ctx.clearRect(0, 0, newWidth, newHeight);
 
-      drawingHistoryRef.current.forEach(stroke => {
-        const scaledX1 = stroke.x1 * scaleX;
-        const scaledY1 = stroke.y1 * scaleY;
-        const scaledX2 = stroke.x2 * scaleX;
-        const scaledY2 = stroke.y2 * scaleY;
+      drawingHistory.forEach(stroke => {
+        ctx.strokeStyle = stroke.color;
+        ctx.lineWidth = stroke.brushSize;
+        ctx.beginPath();
+        
+        stroke.points.forEach((point, index) => {
+            const scaledX= point.x * scaleX;
+            const scaledY= point.y * scaleY;
 
-        drawLine(scaledX1, scaledY1, scaledX2, scaledY2, stroke.color, stroke.brushSize, ctx);
+            if(index === 0) {
+                ctx.moveTo(scaledX, scaledY);
+            } else {
+                ctx.lineTo(scaledX, scaledY);
+            }
+        });
+        ctx.stroke();
       });
     }
-  }, [drawLine]);
+  }, [drawingHistory]);
 
   const setCanvasDimensions = useCallback(() => {
     const canvas = canvasRef.current;
@@ -74,34 +82,25 @@ function Canvas({ socket,
     const canvas = canvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
-    const currentX = clientX - rect.left;
-    const currentY = clientY - rect.top;
+    const currentPoint = {
+        x: clientX- rect.left,
+        y: clientY - rect.top
+    }
+
+    const points = currentStrokeRef.current.points;
+    const lastPoint = points[points.length - 1];
 
     const ctx = canvas.getContext('2d');
-    ctx.strokeStyle = currentColor;
-    ctx.lineWidth = currentBrushSize;
+    ctx.strokeStyle = currentStrokeRef.current.currentColor;
+    ctx.lineWidth = currentStrokeRef.current.currentBrushSize;
     ctx.beginPath();
-    ctx.moveTo(lastPos.current.x, lastPos.current.y);
-    ctx.lineTo(currentX, currentY);
+    ctx.moveTo(lastPoint.x, lastPoint.y);
+    ctx.lineTo(currentPoint.x, currentPoint.y);
     ctx.stroke();
 
-    const strokeData = {
-      x1: lastPos.current.x,
-      y1: lastPos.current.y,
-      x2: currentX,
-      y2: currentY,
-      color: currentColor,
-      brushSize: currentBrushSize
-    };
+    currentStrokeRef.current.points.push(currentPoint);
 
-    socket.emit('drawing', strokeData);
-
-    drawingHistoryRef.current.push(strokeData);
-    setDrawingHistory(drawingHistoryRef.current);
-    setRedoStack([]);
-
-    lastPos.current = { x: currentX, y: currentY };
-  }, [isDrawing, currentColor, currentBrushSize, socket, setDrawingHistory, setRedoStack]);
+  }, [isDrawing]);
 
   // --- Mouse Event Handlers ---
   const handleMouseDown = useCallback((e) => {
@@ -109,23 +108,37 @@ function Canvas({ socket,
     const canvas = canvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
-    lastPos.current = {
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top,
-    };
-  }, []);
+    const point = {
+        x: e.clientX- rect.left,
+        y: e.clientY - rect.top
+    }
+    currentStrokeRef.current = {
+        color: currentColor,
+        brushSize: currentBrushSize,
+        points: [point]
+    }
+  }, [currentColor, currentBrushSize]);
 
   const handleMouseMove = useCallback((e) => {
     handleDrawingMove(e.clientX, e.clientY);
   }, [handleDrawingMove]);
 
   const handleMouseUp = useCallback(() => {
+    if (isDrawing && currentStrokeRef.current &&
+     currentStrokeRef.current.points.length > 1) {
+         onDrawEnd(currentStrokeRef.current);
+     }
+     
     setIsDrawing(false);
-  }, []);
+    currentStrokeRef.current = null;
+  }, [isDrawing, onDrawEnd]);
 
   const handleMouseOut = useCallback(() => {
+    if (isDrawing){
+        handleMouseUp();
+    }
     setIsDrawing(false);
-  }, []);
+  }, [isDrawing, handleMouseUp]);
 
   // --- Touch Event Handlers ---
   const handleTouchStart = useCallback((e) => {
@@ -166,41 +179,6 @@ function Canvas({ socket,
     };
   }, [setCanvasDimensions]);
 
-  useEffect(() => {
-    socket.on('drawing', (data) => {
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-      const ctx = canvas.getContext('2d');
-      drawLine(data.x1, data.y1, data.x2, data.y2, data.color, data.brushSize, ctx);
-
-      drawingHistoryRef.current.push({
-        x1: data.x1,
-        y1: data.y1,
-        x2: data.x2,
-        y2: data.y2,
-        color: data.color,
-        brushSize: data.brushSize
-      });
-      setDrawingHistory(drawingHistoryRef.current);
-    });
-
-    socket.on('clearCanvas', () => {
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-      const ctx = canvas.getContext('2d');
-
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      drawingHistoryRef.current = [];
-      setDrawingHistory([]);
-    });
-
-
-    return () => {
-      socket.off('drawing');
-      socket.off('clearCanvas');
-      
-    };
-  }, [drawLine, socket, setDrawingHistory]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -219,9 +197,21 @@ function Canvas({ socket,
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     drawingHistory.forEach(stroke => {
-        drawLine(stroke.x1, stroke.y1, stroke.x2, stroke.y2, stroke.color, stroke.brushSize, ctx);
+        ctx.strokeStyle = stroke.color;
+        ctx.lineWidth = stroke.brushSize;
+        ctx.beginPath();
+
+        for(let i = 0; i< stroke.points.length; i++){
+            const point= stroke.points[i];
+            if(i === 0){
+                ctx.moveTo(point.x, point.y);
+            } else {
+                ctx.lineTo(point.x, point.y);
+            }
+        }
+        ctx.stroke();
     })
-  },[drawingHistory, drawLine]);
+  },[drawingHistory]);
 
   // --- Render ---
   return (

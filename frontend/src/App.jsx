@@ -12,33 +12,29 @@ function App() {
   const [drawingHistory, setDrawingHistory] = useState([]); // Stores all drawn strokes
   const [redoStack, setRedoStack] = useState([]);
 
-  // handleClearCanvas: Clears the canvas for all users
-  const handleClearCanvas = useCallback(() => {
-    
-    // Emit an event to the server to tell all clients to clear their canvases
-    socket.emit('clearCanvas');
-
-    // Clear local drawing history immediately for responsiveness
-    setDrawingHistory([]);
-  }, []);
-
+  
   const undo = useCallback(() => {
     if (drawingHistory.length === 0) return;
-
+    
     const lastAction = drawingHistory[drawingHistory.length-1];
     setRedoStack((prev) => [...prev, lastAction]);
     setDrawingHistory((prev) => prev.slice(0,-1));
   }, [drawingHistory]);
-
+  
   
   const redo = useCallback(() => {
     if (redoStack.length === 0) return;
-
+    
     const lastUndo = redoStack[redoStack.length-1];
     setDrawingHistory((prev) => [...prev, lastUndo]);
     setRedoStack((prev) => prev.slice(0,-1));
   }, [redoStack]);
-
+  
+  const clear = useCallback(() => {
+    setDrawingHistory([]);
+    setRedoStack([]);
+  },[]);
+  
   const handleUndo = () => {
     undo();
     socket.emit('undo');
@@ -48,15 +44,36 @@ function App() {
     redo();
     socket.emit('redo');
   };
+  
+  // handleClearCanvas: Clears the canvas for all users
+  const handleClearCanvas = () => {
+    clear();
+    // Emit an event to the server to tell all clients to clear their canvases
+    socket.emit('clearCanvas');
+  };
+
+  const handleDraw = useCallback((stroke) => {
+    setDrawingHistory(prevHistory => [...prevHistory, stroke]);
+    setRedoStack([]);
+    socket.emit('drawing', stroke);
+
+  }, [socket])
 
   useEffect(() => {
+    socket.on('drawing', (stroke) => {
+      setDrawingHistory(prevHistory => [...prevHistory, stroke]);
+
+    });
     socket.on('undo', undo);
     socket.on('redo', redo);
-    return(() => {
+    socket.on('clearCanvas', clear);
+    return () => {
+      socket.off('drawing');
       socket.off('undo', undo);
       socket.off('redo', redo);
-    })
-  }, [undo, redo, socket])
+      socket.off('clearCanvas', clear);
+    }
+  }, [undo, redo, socket]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '100vh', backgroundColor: '#f0f0f0' }}>
@@ -65,8 +82,7 @@ function App() {
         currentColor={currentColor}
         currentBrushSize={currentBrushSize}
         drawingHistory={drawingHistory}
-        setDrawingHistory={setDrawingHistory}
-        setRedoStack={setRedoStack}
+        onDrawEnd={handleDraw}
       />
       <Toolbar
         currentColor={currentColor}
