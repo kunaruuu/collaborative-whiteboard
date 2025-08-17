@@ -98,9 +98,16 @@ function Canvas({ socket,
     ctx.lineTo(currentPoint.x, currentPoint.y);
     ctx.stroke();
 
+    socket.emit('drawing-in-progress', {
+        start: lastPoint,
+        end: currentPoint,
+        color: currentStrokeRef.current.currentColor,
+        brushSize: currentStrokeRef.current.currentBrushSize
+    });
+
     currentStrokeRef.current.points.push(currentPoint);
 
-  }, [isDrawing]);
+  }, [isDrawing, socket]);
 
   // --- Mouse Event Handlers ---
   const handleMouseDown = useCallback((e) => {
@@ -212,6 +219,28 @@ function Canvas({ socket,
         ctx.stroke();
     })
   },[drawingHistory]);
+
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleInProgress = (data) => {
+        const canvas = canvasRef.current;
+        if(!canvas) return;
+        const ctx = canvas.getContext('2d');
+        ctx.strokeStyle = data.color;
+        ctx.lineWidth = data.brushSize;
+        ctx.beginPath();
+        ctx.moveTo(data.start.x, data.start.y);
+        ctx.lineTo(data.end.x, data.end.y);
+        ctx.stroke();
+    }
+
+    socket.on('drawing-in-progress', handleInProgress);
+
+    return() => {
+        socket.off('drawing-in-progress', handleInProgress);
+    }
+  },[socket]);
 
   // --- Render ---
   return (

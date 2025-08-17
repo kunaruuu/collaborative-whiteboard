@@ -34,6 +34,10 @@ io.on('connection', (socket) => {
         socket.broadcast.emit('undo');
     });
 
+    socket.on('drawing-in-progress', (data) => {
+        socket.broadcast.emit('drawing-in-progress', data);
+    });
+
     socket.on('redo', () => {
         socket.broadcast.emit('redo');
     });
