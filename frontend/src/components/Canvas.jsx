@@ -91,8 +91,8 @@ function Canvas({ socket,
     const lastPoint = points[points.length - 1];
 
     const ctx = canvas.getContext('2d');
-    ctx.strokeStyle = currentStrokeRef.current.currentColor;
-    ctx.lineWidth = currentStrokeRef.current.currentBrushSize;
+    ctx.strokeStyle = currentStrokeRef.current.color;
+    ctx.lineWidth = currentStrokeRef.current.brushSize;
     ctx.beginPath();
     ctx.moveTo(lastPoint.x, lastPoint.y);
     ctx.lineTo(currentPoint.x, currentPoint.y);
@@ -101,8 +101,8 @@ function Canvas({ socket,
     socket.emit('drawing-in-progress', {
         start: lastPoint,
         end: currentPoint,
-        color: currentStrokeRef.current.currentColor,
-        brushSize: currentStrokeRef.current.currentBrushSize
+        color: currentStrokeRef.current.color,
+        brushSize: currentStrokeRef.current.brushSize
     });
 
     currentStrokeRef.current.points.push(currentPoint);
