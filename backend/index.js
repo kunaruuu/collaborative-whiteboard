@@ -29,6 +29,14 @@ io.on('connection', (socket) => {
 
         io.emit("clearCanvas");
     })
+
+    socket.on('undo', () => {
+        socket.broadcast.emit('undo');
+    });
+
+    socket.on('redo', () => {
+        socket.broadcast.emit('redo');
+    });
 });
 
 const PORT = process.env.PORT || 3001;

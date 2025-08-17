@@ -1,6 +1,15 @@
 import React from 'react';
 
-function Toolbar({ currentColor, setCurrentColor, currentBrushSize, setCurrentBrushSize, onClearCanvas }) {
+function Toolbar({ currentColor,
+  setCurrentColor, 
+  currentBrushSize, 
+  setCurrentBrushSize, 
+  onClearCanvas, 
+  onUndo,
+  onRedo,
+  canUndo,
+  canRedo
+ }) {
   return (
     <div style={{ marginTop: '10px', display: 'flex', gap: '10px', alignItems: 'center' }}>
       <label htmlFor="colorPicker">Color:</label>
@@ -24,6 +33,12 @@ function Toolbar({ currentColor, setCurrentColor, currentBrushSize, setCurrentBr
 
       <button onClick={onClearCanvas} style={{ marginLeft: '20px', padding: '8px 15px', cursor: 'pointer' }}>
         Clear Canvas
+      </button>
+      <button onClick={onUndo} disabled ={!canUndo} style={{ padding: '8px 15px', cursor: 'pointer' }}>
+        Undo
+      </button>
+      <button onClick={onRedo} disabled ={!canRedo} style={{ padding: '8px 15px', cursor: 'pointer' }}>
+        Redo
       </button>
     </div>
   );

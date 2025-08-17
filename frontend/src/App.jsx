@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import io from 'socket.io-client';
 import Canvas from './components/Canvas';
 import Toolbar from './components/Toolbar';
@@ -10,6 +10,7 @@ function App() {
   const [currentColor, setCurrentColor] = useState('#000000');
   const [currentBrushSize, setCurrentBrushSize] = useState(2);
   const [drawingHistory, setDrawingHistory] = useState([]); // Stores all drawn strokes
+  const [redoStack, setRedoStack] = useState([]);
 
   // handleClearCanvas: Clears the canvas for all users
   const handleClearCanvas = useCallback(() => {
@@ -21,6 +22,42 @@ function App() {
     setDrawingHistory([]);
   }, []);
 
+  const undo = useCallback(() => {
+    if (drawingHistory.length === 0) return;
+
+    const lastAction = drawingHistory[drawingHistory.length-1];
+    setRedoStack((prev) => [...prev, lastAction]);
+    setDrawingHistory((prev) => prev.slice(0,-1));
+  }, [drawingHistory]);
+
+  
+  const redo = useCallback(() => {
+    if (redoStack.length === 0) return;
+
+    const lastUndo = redoStack[redoStack.length-1];
+    setDrawingHistory((prev) => [...prev, lastUndo]);
+    setRedoStack((prev) => prev.slice(0,-1));
+  }, [redoStack]);
+
+  const handleUndo = () => {
+    undo();
+    socket.emit('undo');
+  };
+
+  const handleRedo = () => {
+    redo();
+    socket.emit('redo');
+  };
+
+  useEffect(() => {
+    socket.on('undo', undo);
+    socket.on('redo', redo);
+    return(() => {
+      socket.off('undo', undo);
+      socket.off('redo', redo);
+    })
+  }, [undo, redo, socket])
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '100vh', backgroundColor: '#f0f0f0' }}>
       <Canvas
@@ -29,6 +66,7 @@ function App() {
         currentBrushSize={currentBrushSize}
         drawingHistory={drawingHistory}
         setDrawingHistory={setDrawingHistory}
+        setRedoStack={setRedoStack}
       />
       <Toolbar
         currentColor={currentColor}
@@ -36,6 +74,10 @@ function App() {
         currentBrushSize={currentBrushSize}
         setCurrentBrushSize={setCurrentBrushSize}
         onClearCanvas={handleClearCanvas}
+        onUndo={handleUndo}
+        onRedo={handleRedo}
+        canUndo={drawingHistory.length>0}
+        canRedo={redoStack.length>0}
       />
     </div>
   );

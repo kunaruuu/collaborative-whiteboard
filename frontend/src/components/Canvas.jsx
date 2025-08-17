@@ -1,6 +1,11 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 
-function Canvas({ socket, currentColor, currentBrushSize, drawingHistory, setDrawingHistory }) {
+function Canvas({ socket, 
+    currentColor, 
+    currentBrushSize, 
+    drawingHistory, 
+    setDrawingHistory, 
+    setRedoStack }) {
   const canvasRef = useRef(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const lastPos = useRef({ x: 0, y: 0 });
@@ -93,9 +98,10 @@ function Canvas({ socket, currentColor, currentBrushSize, drawingHistory, setDra
 
     drawingHistoryRef.current.push(strokeData);
     setDrawingHistory(drawingHistoryRef.current);
+    setRedoStack([]);
 
     lastPos.current = { x: currentX, y: currentY };
-  }, [isDrawing, currentColor, currentBrushSize, socket, setDrawingHistory]);
+  }, [isDrawing, currentColor, currentBrushSize, socket, setDrawingHistory, setRedoStack]);
 
   // --- Mouse Event Handlers ---
   const handleMouseDown = useCallback((e) => {
@@ -188,9 +194,11 @@ function Canvas({ socket, currentColor, currentBrushSize, drawingHistory, setDra
       setDrawingHistory([]);
     });
 
+
     return () => {
       socket.off('drawing');
       socket.off('clearCanvas');
+      
     };
   }, [drawLine, socket, setDrawingHistory]);
 
@@ -202,6 +210,18 @@ function Canvas({ socket, currentColor, currentBrushSize, drawingHistory, setDra
     ctx.strokeStyle = currentColor;
     ctx.lineWidth = currentBrushSize;
   }, [currentColor, currentBrushSize]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    drawingHistory.forEach(stroke => {
+        drawLine(stroke.x1, stroke.y1, stroke.x2, stroke.y2, stroke.color, stroke.brushSize, ctx);
+    })
+  },[drawingHistory, drawLine]);
 
   // --- Render ---
   return (
