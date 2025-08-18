@@ -159,7 +159,12 @@ function Canvas({ socket,
       x: touch.clientX - rect.left,
       y: touch.clientY - rect.top,
     };
-  }, []);
+    currentStrokeRef.current = {
+        color: currentColor,
+        brushSize: currentBrushSize,
+        points: [point]
+    }
+  }, [currentColor, currentBrushSize]);
 
   const handleTouchMove = useCallback((e) => {
     e.preventDefault(); // Prevent default touch behavior (e.g., scrolling)
@@ -169,13 +174,18 @@ function Canvas({ socket,
 
   const handleTouchEnd = useCallback((e) => {
     e.preventDefault(); // Prevent default touch behavior
+    if (isDrawing && currentStrokeRef.current &&
+     currentStrokeRef.current.points.length > 1) {
+         onDrawEnd(currentStrokeRef.current);
+     }
     setIsDrawing(false);
-  }, []);
+    currentStrokeRef.current = null;
+  }, [onDrawEnd, isDrawing]);
 
   const handleTouchCancel = useCallback((e) => {
     e.preventDefault(); // Prevent default touch behavior
-    setIsDrawing(false);
-  }, []);
+    handleTouchEnd(e);
+  }, [handleTouchEnd]);
 
   // --- useEffects ---
   useEffect(() => {
