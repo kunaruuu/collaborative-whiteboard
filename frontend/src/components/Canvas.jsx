@@ -155,7 +155,7 @@ function Canvas({ socket,
     const canvas = canvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
-    lastPos.current = {
+    point = {
       x: touch.clientX - rect.left,
       y: touch.clientY - rect.top,
     };
