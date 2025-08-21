@@ -11,6 +11,7 @@ function App() {
   const [currentBrushSize, setCurrentBrushSize] = useState(2);
   const [drawingHistory, setDrawingHistory] = useState([]); // Stores all drawn strokes
   const [redoStack, setRedoStack] = useState([]);
+  const [currentTool, setCurrentTool] = useState('brush');
 
   
   const undo = useCallback(() => {
@@ -76,13 +77,14 @@ function App() {
   }, [undo, redo, socket]);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '100vh', backgroundColor: '#f0f0f0' }}>
+    <div style={{ display: 'flex', gap:'10px', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '100vh', backgroundColor: '#f0f0f0' }}>
       <Canvas
         socket={socket}
         currentColor={currentColor}
         currentBrushSize={currentBrushSize}
         drawingHistory={drawingHistory}
         onDrawEnd={handleDraw}
+        currentTool={currentTool}
       />
       <Toolbar
         currentColor={currentColor}
@@ -94,6 +96,8 @@ function App() {
         onRedo={handleRedo}
         canUndo={drawingHistory.length>0}
         canRedo={redoStack.length>0}
+        currentTool={currentTool}
+        setCurrentTool={setCurrentTool}
       />
     </div>
   );

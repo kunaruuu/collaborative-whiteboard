@@ -8,24 +8,68 @@ function Toolbar({ currentColor,
   onUndo,
   onRedo,
   canUndo,
-  canRedo
+  canRedo,
+  currentTool,
+  setCurrentTool
  }) {
+  
   return (
-    <div style={{ marginTop: '10px', display: 'flex', gap: '10px', alignItems: 'center' }}>
-      <label htmlFor="colorPicker">Color:</label>
+    <div style={{ display: 'flex', gap: '10px', 
+    alignItems: 'center', border: '1px solid #bbbbbbff', padding: '10px',
+     backgroundColor: '#d5d1d134',
+      borderRadius: '5px',
+      maxWidth: '80vw',
+      boxSizing: 'border-box',
+      // flexWrap: 'wrap'
+       }}>
+      <div style = {{
+        marginRight: '20px',
+        display: 'flex',
+        gap: '5px',
+      }}>
+        <button onClick={() => setCurrentTool('brush')} 
+          style={{
+            padding: '8px 15px',
+            cursor: 'pointer',
+            backgroundColor: currentTool === 'brush' ? '#007bff' : '#f0f0f0',
+            color: currentTool === 'brush' ? 'white' :'black',
+            border: '1px solid #007bff',
+            borderRadius: '3px'
+          }}>
+          Brush
+          </button>
+
+        <button onClick={() => setCurrentTool('eraser')}
+          style={{
+            padding: '8px 15px',
+            cursor: 'pointer',
+            backgroundColor: currentTool === 'eraser' ? '#007bff' : '#f0f0f0',
+            color: currentTool === 'eraser' ? 'white' :'black',
+            border: '1px solid #007bff',
+            borderRadius: '3px'
+          }}>
+          Eraser
+        </button>
+      </div>
+      <label htmlFor="colorPicker" style={{
+        opacity: currentTool === 'eraser' ? 0.5 : 1
+      }}>Color:</label>
       <input
         type="color"
         id="colorPicker"
         value={currentColor}
         onChange={(e) => setCurrentColor(e.target.value)}
+        disabled={currentTool === 'eraser'}
+        style={{ cursor: currentTool === 'eraser' ? 'not-allowed' : 'pointer' }}
       />
 
-      <label htmlFor="brushSize">Brush Size:</label>
+      <label htmlFor="brushSize" style={{
+      }}>Brush Size:</label>
       <input
         type="range"
         id="brushSize"
         min="1"
-        max="10"
+        max="100"
         value={currentBrushSize}
         onChange={(e) => setCurrentBrushSize(parseInt(e.target.value))}
       />

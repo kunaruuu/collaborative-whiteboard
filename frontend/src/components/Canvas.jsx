@@ -4,7 +4,8 @@ function Canvas({ socket,
     currentColor, 
     currentBrushSize, 
     drawingHistory, 
-    onDrawEnd }) {
+    onDrawEnd,
+    currentTool}) {
   const canvasRef = useRef(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const lastPos = useRef({ x: 0, y: 0 });
@@ -12,16 +13,6 @@ function Canvas({ socket,
   const currentStrokeRef = useRef(null);
 
   // --- Helper Functions (wrapped in useCallback for stability) ---
-
-  const drawLine = useCallback((x1, y1, x2, y2, color, brushSize, context) => {
-    if (!context) return;
-    context.strokeStyle = color;
-    context.lineWidth = brushSize;
-    context.beginPath();
-    context.moveTo(x1, y1);
-    context.lineTo(x2, y2);
-    context.stroke();
-  }, []);
 
   const redrawCanvas = useCallback(() => {
     const canvas = canvasRef.current;
@@ -93,6 +84,8 @@ function Canvas({ socket,
     const ctx = canvas.getContext('2d');
     ctx.strokeStyle = currentStrokeRef.current.color;
     ctx.lineWidth = currentStrokeRef.current.brushSize;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
     ctx.beginPath();
     ctx.moveTo(lastPoint.x, lastPoint.y);
     ctx.lineTo(currentPoint.x, currentPoint.y);
@@ -120,11 +113,12 @@ function Canvas({ socket,
         y: e.clientY - rect.top
     }
     currentStrokeRef.current = {
-        color: currentColor,
+        color: currentTool === 'eraser' ? '#fff' : currentColor, // Eraser color is white
         brushSize: currentBrushSize,
         points: [point]
     }
-  }, [currentColor, currentBrushSize]);
+    
+  }, [currentColor, currentBrushSize, currentTool]);
 
   const handleMouseMove = useCallback((e) => {
     handleDrawingMove(e.clientX, e.clientY);
@@ -160,11 +154,11 @@ function Canvas({ socket,
       y: touch.clientY - rect.top,
     };
     currentStrokeRef.current = {
-        color: currentColor,
+        color: currentTool === 'eraser' ? '#fff' : currentColor,
         brushSize: currentBrushSize,
         points: [point]
     }
-  }, [currentColor, currentBrushSize]);
+  }, [currentColor, currentBrushSize, currentTool]);
 
   const handleTouchMove = useCallback((e) => {
     e.preventDefault(); // Prevent default touch behavior (e.g., scrolling)
@@ -216,6 +210,8 @@ function Canvas({ socket,
     drawingHistory.forEach(stroke => {
         ctx.strokeStyle = stroke.color;
         ctx.lineWidth = stroke.brushSize;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
         ctx.beginPath();
 
         for(let i = 0; i< stroke.points.length; i++){
@@ -239,6 +235,8 @@ function Canvas({ socket,
         const ctx = canvas.getContext('2d');
         ctx.strokeStyle = data.color;
         ctx.lineWidth = data.brushSize;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
         ctx.beginPath();
         ctx.moveTo(data.start.x, data.start.y);
         ctx.lineTo(data.end.x, data.end.y);
