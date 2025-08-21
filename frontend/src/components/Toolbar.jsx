@@ -10,9 +10,11 @@ function Toolbar({ currentColor,
   canUndo,
   canRedo,
   currentTool,
-  setCurrentTool
- }) {
-  
+  setCurrentTool,
+  onSaveCanvas
+ }){
+ 
+  const [showSaveOptions, setShowSaveOptions] = React.useState(false);
   return (
     <div style={{ display: 'flex', gap: '10px', 
     alignItems: 'center', border: '1px solid #bbbbbbff', padding: '10px',
@@ -84,6 +86,53 @@ function Toolbar({ currentColor,
       <button onClick={onRedo} disabled ={!canRedo} style={{ padding: '8px 15px', cursor: 'pointer' }}>
         Redo
       </button>
+      
+      <div style={{position: 'relative',
+        display: 'inline-block',
+        marginLeft: '20px',
+        border: '1px solid #007bff',
+        borderRadius: '3px',
+      }}>
+        <button onClick={() => onSaveCanvas(true)} style={{ padding: '8px 15px', cursor: 'pointer',
+        borderRight: '1px solid #007bff',
+        border : 'none',
+        background: 'none'
+         }}>
+          Save
+        </button>
+        <button onClick={() => setShowSaveOptions(!showSaveOptions)} style={{ padding: '8px 5px', cursor: 'pointer',
+        border : 'none',
+        background: 'none'
+        }}>
+          &#9660; {/* Down arrow icon */}
+        </button>
+        {showSaveOptions && (
+          <div style={{
+            position: 'absolute',
+            top: '100%',
+            left: 0,
+            backgroundColor: '#fff',
+            border: '1px solid #ccc',
+            borderRadius: '3px',
+            zIndex: 100,
+            display: 'flex',
+            flexDirection: 'column',
+            minWidth: '150px',
+            
+          }}>
+            <button onClick={ () => {onSaveCanvas(false);
+              setShowSaveOptions(false);
+            }} style={{ padding: '8px 15px', cursor: 'pointer',
+            border: 'none',
+            background: 'none',
+            textAlign: 'left',
+            whiteSpace: 'nowrap'
+             }}>
+              Save without Background
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

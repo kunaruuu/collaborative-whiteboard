@@ -12,6 +12,13 @@ function App() {
   const [drawingHistory, setDrawingHistory] = useState([]); // Stores all drawn strokes
   const [redoStack, setRedoStack] = useState([]);
   const [currentTool, setCurrentTool] = useState('brush');
+  const canvasRef = React.useRef(null);
+
+  const handleSaveCanvas = useCallback((withBackground = true) => {
+    if(canvasRef.current) {
+      canvasRef.current.saveImage(withBackground);
+    }
+  }, []);
 
   
   const undo = useCallback(() => {
@@ -80,6 +87,7 @@ function App() {
     <div style={{ display: 'flex', gap:'10px', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '100vh', backgroundColor: '#f0f0f0' }}>
       <Canvas
         socket={socket}
+        ref={canvasRef}
         currentColor={currentColor}
         currentBrushSize={currentBrushSize}
         drawingHistory={drawingHistory}
@@ -98,6 +106,7 @@ function App() {
         canRedo={redoStack.length>0}
         currentTool={currentTool}
         setCurrentTool={setCurrentTool}
+        onSaveCanvas={handleSaveCanvas}
       />
     </div>
   );

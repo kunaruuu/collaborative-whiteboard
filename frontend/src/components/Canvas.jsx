@@ -1,11 +1,11 @@
-import React, { useRef, useEffect, useState, useCallback } from 'react';
+import React, { useRef, useEffect, useState, useCallback, forwardRef, useImperativeHandle } from 'react';
 
-function Canvas({ socket, 
+const Canvas = forwardRef(({ socket, 
     currentColor, 
     currentBrushSize, 
     drawingHistory, 
     onDrawEnd,
-    currentTool}) {
+    currentTool}, ref) => {
   const canvasRef = useRef(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const lastPos = useRef({ x: 0, y: 0 });
@@ -13,6 +13,28 @@ function Canvas({ socket,
   const currentStrokeRef = useRef(null);
 
   // --- Helper Functions (wrapped in useCallback for stability) ---
+
+  const drawHistoryCanvas = useCallback((ctx, history, scaleX =1, scaleY =1) => {
+    history.forEach(stroke => {
+      ctx.strokeStyle = stroke.color;
+      ctx.lineWidth = stroke.brushSize;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.beginPath();
+      
+      stroke.points.forEach((point, index) => {
+        const scaledX = point.x * scaleX;
+        const scaledY = point.y * scaleY;
+
+        if (index === 0) {
+          ctx.moveTo(scaledX, scaledY);
+        } else {
+          ctx.lineTo(scaledX, scaledY);
+        }
+      });
+      ctx.stroke();
+    });
+  },[]);
 
   const redrawCanvas = useCallback(() => {
     const canvas = canvasRef.current;
@@ -30,25 +52,10 @@ function Canvas({ socket,
 
       ctx.clearRect(0, 0, newWidth, newHeight);
 
-      drawingHistory.forEach(stroke => {
-        ctx.strokeStyle = stroke.color;
-        ctx.lineWidth = stroke.brushSize;
-        ctx.beginPath();
-        
-        stroke.points.forEach((point, index) => {
-            const scaledX= point.x * scaleX;
-            const scaledY= point.y * scaleY;
-
-            if(index === 0) {
-                ctx.moveTo(scaledX, scaledY);
-            } else {
-                ctx.lineTo(scaledX, scaledY);
-            }
-        });
-        ctx.stroke();
-      });
+      // Redraw the history with scaling
+      drawHistoryCanvas(ctx, drawingHistory, scaleX, scaleY);
     }
-  }, [drawingHistory]);
+  }, [drawingHistory, drawHistoryCanvas]);
 
   const setCanvasDimensions = useCallback(() => {
     const canvas = canvasRef.current;
@@ -190,6 +197,33 @@ function Canvas({ socket,
     };
   }, [setCanvasDimensions]);
 
+  useImperativeHandle(ref, () => ({
+    saveImage: (withBackground = true) => {
+      const canvas = canvasRef.current;
+      if (!canvas) {
+        console.error('Canvas element not found for saving');
+        return;
+      }
+      const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = canvas.width;
+      tempCanvas.height = canvas.height;
+      const tempCtx = tempCanvas.getContext('2d');
+      if (withBackground) {
+        tempCtx.fillStyle = 'white'; // Set background color
+        tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+      }
+      drawHistoryCanvas(tempCtx, drawingHistory, 1, 1);
+      // Convert to data URL and trigger download
+      const dataURL = tempCanvas.toDataURL('image/png');
+      const link = document.createElement('a');
+      link.href = dataURL;
+      link.download = 'whiteboard.png';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+  }), [drawingHistory, drawHistoryCanvas]);
+
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -207,24 +241,8 @@ function Canvas({ socket,
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    drawingHistory.forEach(stroke => {
-        ctx.strokeStyle = stroke.color;
-        ctx.lineWidth = stroke.brushSize;
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-        ctx.beginPath();
-
-        for(let i = 0; i< stroke.points.length; i++){
-            const point= stroke.points[i];
-            if(i === 0){
-                ctx.moveTo(point.x, point.y);
-            } else {
-                ctx.lineTo(point.x, point.y);
-            }
-        }
-        ctx.stroke();
-    })
-  },[drawingHistory]);
+    drawHistoryCanvas(ctx, drawingHistory);
+  },[drawingHistory, drawHistoryCanvas]);
 
   useEffect(() => {
     if (!socket) return;
@@ -267,6 +285,6 @@ function Canvas({ socket,
       style={{ border: '1px solid black', backgroundColor: 'white', touchAction: 'none' }} // touchAction: 'none' helps prevent default browser gestures
     />
   );
-}
+});
 
 export default Canvas;
