@@ -262,13 +262,18 @@ const Canvas = forwardRef(({ socket,
 
   const handleTouchEnd = useCallback((e) => {
     e.preventDefault(); // Prevent default touch behavior
-    if (isDrawing && currentStrokeRef.current &&
+    if (currentStrokeRef.current.type === 'line' &&
      currentStrokeRef.current.points.length > 1) {
-         onDrawEnd(currentStrokeRef.current);
+        onDrawEnd(currentStrokeRef.current);
+     }else{
+      if(currentStrokeRef.current.startPoint && currentStrokeRef.current.endPoint &&
+         (currentStrokeRef.current.startPoint.x !== currentStrokeRef.current.endPoint.x ||
+          currentStrokeRef.current.startPoint.y !== currentStrokeRef.current.endPoint.y)) {
+            onDrawEnd(currentStrokeRef.current);
      }
     setIsDrawing(false);
     currentStrokeRef.current = null;
-  }, [onDrawEnd, isDrawing]);
+  }}, [onDrawEnd, isDrawing]);
 
   const handleTouchCancel = useCallback((e) => {
     e.preventDefault(); // Prevent default touch behavior
