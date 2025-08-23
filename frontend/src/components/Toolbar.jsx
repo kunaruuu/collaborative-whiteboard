@@ -20,7 +20,7 @@ function Toolbar({ currentColor,
     alignItems: 'center', border: '1px solid #bbbbbbff', padding: '10px',
      backgroundColor: '#d5d1d134',
       borderRadius: '5px',
-      maxWidth: '80vw',
+      // maxWidth: '80vw',
       boxSizing: 'border-box',
       // flexWrap: 'wrap'
        }}>
@@ -51,6 +51,30 @@ function Toolbar({ currentColor,
             borderRadius: '3px'
           }}>
           Eraser
+        </button>
+
+        <button onClick={() => setCurrentTool('circle')}
+          style={{
+            padding: '8px 15px',
+            cursor: 'pointer',
+            backgroundColor: currentTool === 'circle' ? '#007bff' : '#f0f0f0',
+            color: currentTool === 'circle' ? 'white' :'black',
+            border: '1px solid #007bff',
+            borderRadius: '3px'
+          }}>
+          Circle
+        </button>
+
+        <button onClick={() => setCurrentTool('rectangle')}
+          style={{
+            padding: '8px 15px',
+            cursor: 'pointer',
+            backgroundColor: currentTool === 'rectangle' ? '#007bff' : '#f0f0f0',
+            color: currentTool === 'rectangle' ? 'white' :'black',
+            border: '1px solid #007bff',
+            borderRadius: '3px'
+          }}>
+          Rectangle
         </button>
       </div>
       <label htmlFor="colorPicker" style={{
@@ -92,11 +116,12 @@ function Toolbar({ currentColor,
         marginLeft: '20px',
         border: '1px solid #007bff',
         borderRadius: '3px',
+        whiteSpace: 'nowrap'
       }}>
         <button onClick={() => onSaveCanvas(true)} style={{ padding: '8px 15px', cursor: 'pointer',
-        borderRight: '1px solid #007bff',
         border : 'none',
-        background: 'none'
+        background: 'none',
+        borderRight: '1px solid #007bff'
          }}>
           Save
         </button>

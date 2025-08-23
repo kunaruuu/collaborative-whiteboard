@@ -21,17 +21,52 @@ const Canvas = forwardRef(({ socket,
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
       ctx.beginPath();
-      
-      stroke.points.forEach((point, index) => {
-        const scaledX = point.x * scaleX;
-        const scaledY = point.y * scaleY;
 
-        if (index === 0) {
-          ctx.moveTo(scaledX, scaledY);
-        } else {
-          ctx.lineTo(scaledX, scaledY);
-        }
-      });
+      const scaledStartPoint = {
+        x: stroke.startPoint.x * scaleX,
+        y: stroke.startPoint.y * scaleY
+      };
+      const scaledEndPoint = stroke.endPoint ? {
+        x: stroke.endPoint.x * scaleX,
+        y: stroke.endPoint.y * scaleY
+      } : null;
+
+      switch(stroke.type) {
+        case 'line':
+          stroke.points.forEach((point, index) => {
+            const scaledX = point.x * scaleX;
+            const scaledY = point.y * scaleY;
+  
+            if (index === 0) {
+              ctx.moveTo(scaledX, scaledY);
+            } else {
+              ctx.lineTo(scaledX, scaledY);
+            }
+          });
+          break;
+        case 'rectangle':
+          if(scaledEndPoint) {
+            const width = scaledEndPoint.x - scaledStartPoint.x;
+            const height = scaledEndPoint.y - scaledStartPoint.y;
+            ctx.strokeRect(scaledStartPoint.x, scaledStartPoint.y, width, height);
+          }
+          break;
+        case 'circle':
+          if(scaledEndPoint) {
+            const width = scaledEndPoint.x - scaledStartPoint.x;
+            const height = scaledEndPoint.y - scaledStartPoint.y;
+            const centerX = scaledStartPoint.x + width / 2;
+            const centerY = scaledStartPoint.y + height / 2;
+            // Calculate radius based on the distance from the center to the end point
+            const radius = Math.sqrt(width * width + height * height);
+            ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
+          }
+          break;
+        default:
+          console.warn(`Unknown stroke type: ${stroke.type}`);
+          break;
+      }
+      
       ctx.stroke();
     });
   },[]);
@@ -75,8 +110,7 @@ const Canvas = forwardRef(({ socket,
   // --- Unified Event Handler Logic ---
   // This function handles both mouse and touch move events
   const handleDrawingMove = useCallback((clientX, clientY) => {
-    if (!isDrawing) return;
-
+    if (!isDrawing || !currentStrokeRef.current) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
@@ -84,30 +118,51 @@ const Canvas = forwardRef(({ socket,
         x: clientX- rect.left,
         y: clientY - rect.top
     }
-
-    const points = currentStrokeRef.current.points;
-    const lastPoint = points[points.length - 1];
-
+    
     const ctx = canvas.getContext('2d');
     ctx.strokeStyle = currentStrokeRef.current.color;
     ctx.lineWidth = currentStrokeRef.current.brushSize;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
-    ctx.beginPath();
-    ctx.moveTo(lastPoint.x, lastPoint.y);
-    ctx.lineTo(currentPoint.x, currentPoint.y);
-    ctx.stroke();
-
-    socket.emit('drawing-in-progress', {
+    
+    if(currentStrokeRef.current.type === 'line') {
+      
+      const points = currentStrokeRef.current.points;
+      const lastPoint = points[points.length - 1];
+      ctx.beginPath();
+      ctx.moveTo(lastPoint.x, lastPoint.y);
+      ctx.lineTo(currentPoint.x, currentPoint.y);
+      ctx.stroke();
+      socket.emit('drawing-in-progress', {
         start: lastPoint,
         end: currentPoint,
         color: currentStrokeRef.current.color,
         brushSize: currentStrokeRef.current.brushSize
-    });
-
-    currentStrokeRef.current.points.push(currentPoint);
-
-  }, [isDrawing, socket]);
+      });
+      currentStrokeRef.current.points.push(currentPoint);
+    }else {
+      currentStrokeRef.current.endPoint = currentPoint;
+      ctx.clearRect(0, 0, canvas.width, canvas.height); // to prevent redrawing all the in between shapes overlapping each other
+      drawHistoryCanvas(ctx, drawingHistory);  // to prevent erasing previous drawings
+      ctx.beginPath();
+      const startX = currentStrokeRef.current.startPoint.x;
+      const startY = currentStrokeRef.current.startPoint.y;
+      const width = currentPoint.x - startX;
+      const height = currentPoint.y - startY;
+      if(currentStrokeRef.current.type === 'rectangle') {
+        ctx.strokeRect(startX, startY, width, height);
+      }
+      else if(currentStrokeRef.current.type === 'circle') {
+        const centerX = startX + width / 2;
+        const centerY = startY + height / 2;
+        // Calculate radius based on the distance from the center to the current point
+        const radius = Math.sqrt(width * width + height * height);
+        ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
+        ctx.stroke();
+      } 
+    }
+    
+  }, [isDrawing, socket, drawingHistory, drawHistoryCanvas]);
 
   // --- Mouse Event Handlers ---
   const handleMouseDown = useCallback((e) => {
@@ -120,8 +175,11 @@ const Canvas = forwardRef(({ socket,
         y: e.clientY - rect.top
     }
     currentStrokeRef.current = {
+        type: currentTool ==='brush' || currentTool === 'eraser' ? 'line' : currentTool,
         color: currentTool === 'eraser' ? '#fff' : currentColor, // Eraser color is white
         brushSize: currentBrushSize,
+        startPoint: point,
+        endPoint: point,
         points: [point]
     }
     
@@ -132,9 +190,19 @@ const Canvas = forwardRef(({ socket,
   }, [handleDrawingMove]);
 
   const handleMouseUp = useCallback(() => {
+    if (!isDrawing || !currentStrokeRef.current) return;
     if (isDrawing && currentStrokeRef.current &&
      currentStrokeRef.current.points.length > 1) {
          onDrawEnd(currentStrokeRef.current);
+     }else{
+      const finalStroke = {
+        type: currentStrokeRef.current.type,
+        color: currentStrokeRef.current.color,
+        brushSize: currentStrokeRef.current.brushSize,
+        startPoint: currentStrokeRef.current.startPoint,
+        endPoint: currentStrokeRef.current.endPoint
+      };
+      onDrawEnd(finalStroke);
      }
      
     setIsDrawing(false);
