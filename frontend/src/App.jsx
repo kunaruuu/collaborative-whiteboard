@@ -63,12 +63,14 @@ function App() {
   const handleDraw = useCallback((stroke) => {
     setDrawingHistory(prevHistory => [...prevHistory, stroke]);
     setRedoStack([]);
+    console.log('App.jsx (Sender): Emitting final stroke with color:', stroke.color);
     socket.emit('drawing', stroke);
 
   }, [socket])
 
   useEffect(() => {
     socket.on('drawing', (stroke) => {
+      console.log('App.jsx (Receiver): Received stroke with color:', stroke.color);
       setDrawingHistory(prevHistory => [...prevHistory, stroke]);
 
     });

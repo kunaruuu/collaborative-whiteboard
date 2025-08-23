@@ -111,6 +111,7 @@ const Canvas = forwardRef(({ socket,
   // This function handles both mouse and touch move events
   const handleDrawingMove = useCallback((clientX, clientY) => {
     if (!isDrawing || !currentStrokeRef.current) return;
+    
     const canvas = canvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
@@ -120,8 +121,8 @@ const Canvas = forwardRef(({ socket,
     }
     
     const ctx = canvas.getContext('2d');
-    ctx.strokeStyle = currentStrokeRef.current.color;
-    ctx.lineWidth = currentStrokeRef.current.brushSize;
+    ctx.strokeStyle = currentColor;
+    ctx.lineWidth = currentBrushSize;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
     
@@ -133,17 +134,15 @@ const Canvas = forwardRef(({ socket,
       ctx.moveTo(lastPoint.x, lastPoint.y);
       ctx.lineTo(currentPoint.x, currentPoint.y);
       ctx.stroke();
-      socket.emit('drawing-in-progress', {
-        start: lastPoint,
-        end: currentPoint,
-        color: currentStrokeRef.current.color,
-        brushSize: currentStrokeRef.current.brushSize
-      });
+      
       currentStrokeRef.current.points.push(currentPoint);
     }else {
       currentStrokeRef.current.endPoint = currentPoint;
       ctx.clearRect(0, 0, canvas.width, canvas.height); // to prevent redrawing all the in between shapes overlapping each other
       drawHistoryCanvas(ctx, drawingHistory);  // to prevent erasing previous drawings
+      ctx.strokeStyle = currentColor;
+      ctx.lineWidth = currentBrushSize
+      
       ctx.beginPath();
       const startX = currentStrokeRef.current.startPoint.x;
       const startY = currentStrokeRef.current.startPoint.y;
@@ -161,8 +160,18 @@ const Canvas = forwardRef(({ socket,
         ctx.stroke();
       } 
     }
+    const lastPointForEmit = currentStrokeRef.current.type === 'line' ?
+      currentStrokeRef.current.points[currentStrokeRef.current.points.length - 2] :
+      currentStrokeRef.current.startPoint;
+    socket.emit('drawing-in-progress', {
+        type: currentStrokeRef.current.type,
+        start: lastPointForEmit,
+        end: currentPoint,
+        color: currentTool === 'eraser' ? '#fff' : currentColor,
+        brushSize: currentBrushSize
+      });
     
-  }, [isDrawing, socket, drawingHistory, drawHistoryCanvas]);
+  }, [isDrawing, socket, drawingHistory, drawHistoryCanvas, currentBrushSize, currentColor, currentTool]);
 
   // --- Mouse Event Handlers ---
   const handleMouseDown = useCallback((e) => {
@@ -176,38 +185,45 @@ const Canvas = forwardRef(({ socket,
     }
     currentStrokeRef.current = {
         type: currentTool ==='brush' || currentTool === 'eraser' ? 'line' : currentTool,
-        color: currentTool === 'eraser' ? '#fff' : currentColor, // Eraser color is white
-        brushSize: currentBrushSize,
         startPoint: point,
         endPoint: point,
         points: [point]
     }
     
-  }, [currentColor, currentBrushSize, currentTool]);
+  }, [currentTool]);
 
   const handleMouseMove = useCallback((e) => {
     handleDrawingMove(e.clientX, e.clientY);
   }, [handleDrawingMove]);
 
   const handleMouseUp = useCallback(() => {
-    if (!isDrawing || !currentStrokeRef.current) return;
-    if (isDrawing && currentStrokeRef.current &&
+    if (!isDrawing || !currentStrokeRef.current){ 
+      setIsDrawing(false);
+      return;}
+
+      let strokeToCommit = null;
+    if (currentStrokeRef.current.type === 'line' &&
      currentStrokeRef.current.points.length > 1) {
-         onDrawEnd(currentStrokeRef.current);
+        strokeToCommit = { ...currentStrokeRef.current,
+        color: currentTool === 'eraser' ? '#fff' : currentColor,
+        brushSize: currentBrushSize };
+        //  onDrawEnd(currentStrokeRef.current);
      }else{
-      const finalStroke = {
-        type: currentStrokeRef.current.type,
-        color: currentStrokeRef.current.color,
-        brushSize: currentStrokeRef.current.brushSize,
-        startPoint: currentStrokeRef.current.startPoint,
-        endPoint: currentStrokeRef.current.endPoint
-      };
-      onDrawEnd(finalStroke);
+      if(currentStrokeRef.current.startPoint && currentStrokeRef.current.endPoint &&
+         (currentStrokeRef.current.startPoint.x !== currentStrokeRef.current.endPoint.x ||
+          currentStrokeRef.current.startPoint.y !== currentStrokeRef.current.endPoint.y)) {
+            strokeToCommit = { ...currentStrokeRef.current,
+            color: currentTool === 'eraser' ? '#fff' : currentColor,
+            brushSize: currentBrushSize };
      }
-     
+
+     if(strokeToCommit) {
+      onDrawEnd(strokeToCommit);
+     }
+    }
     setIsDrawing(false);
     currentStrokeRef.current = null;
-  }, [isDrawing, onDrawEnd]);
+  }, [isDrawing, onDrawEnd, currentBrushSize, currentColor, currentTool]);
 
   const handleMouseOut = useCallback(() => {
     if (isDrawing){
@@ -229,8 +245,11 @@ const Canvas = forwardRef(({ socket,
       y: touch.clientY - rect.top,
     };
     currentStrokeRef.current = {
+        type: currentTool ==='brush' || currentTool === 'eraser' ? 'line' : currentTool,
         color: currentTool === 'eraser' ? '#fff' : currentColor,
         brushSize: currentBrushSize,
+        startPoint: point,
+        endPoint: point,
         points: [point]
     }
   }, [currentColor, currentBrushSize, currentTool]);
@@ -319,13 +338,40 @@ const Canvas = forwardRef(({ socket,
         const canvas = canvasRef.current;
         if(!canvas) return;
         const ctx = canvas.getContext('2d');
+
+        if(data.type !== 'line') {
+          ctx.clearRect(0, 0, canvas.width, canvas.height); // to prevent redrawing all the in between shapes overlapping each other
+          drawHistoryCanvas(ctx, drawingHistory);
+        }
         ctx.strokeStyle = data.color;
         ctx.lineWidth = data.brushSize;
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
         ctx.beginPath();
-        ctx.moveTo(data.start.x, data.start.y);
-        ctx.lineTo(data.end.x, data.end.y);
+        
+        switch(data.type) {
+          case 'line':  
+            ctx.moveTo(data.start.x, data.start.y);
+            ctx.lineTo(data.end.x, data.end.y);
+            break;
+          case 'rectangle':
+            const rectWidth = data.end.x - data.start.x;
+            const rectHeight = data.end.y - data.start.y;
+            ctx.strokeRect(data.start.x, data.start.y, rectWidth, rectHeight);
+            break;
+          case 'circle':
+            const width = data.end.x - data.start.x;
+            const height = data.end.y - data.start.y;
+            const centerX = data.start.x + width / 2;
+            const centerY = data.start.y + height / 2;
+            // Calculate radius based on the distance from the center to the end point
+            const radius = Math.sqrt(width * width + height * height);
+            ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
+            break;
+          default:
+            console.warn(`Unknown stroke type: ${data.type}`);
+            break;
+        }
         ctx.stroke();
     }
 
@@ -334,7 +380,7 @@ const Canvas = forwardRef(({ socket,
     return() => {
         socket.off('drawing-in-progress', handleInProgress);
     }
-  },[socket]);
+  },[socket, drawingHistory, drawHistoryCanvas]);
 
   // --- Render ---
   return (
